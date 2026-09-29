@@ -38,8 +38,11 @@ services:
   agent:
     build: .
     image: day12-agent:prod
+    # 1 instance → 8000:8000. Khi `--scale agent=3`, mỗi replica lấy một cổng
+    # trong dải 8000-8002 (cố định 8000:8000 thì replica thứ 2 trở đi lỗi
+    # "port is already allocated").
     ports:
-      - "8000:8000"
+      - "8000-8002:8000"
     environment:
       PORT: "8000"
       AGENT_API_KEY: ${AGENT_API_KEY:?AGENT_API_KEY chưa được set trong .env}
@@ -57,6 +60,19 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+  # Mở rộng tùy chọn: load balancer round-robin trước các replica agent.
+  # Chỉ chạy khi bật profile:  docker compose --profile lb up -d --scale agent=3
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ["lb"]
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      agent:
+        condition: service_healthy
 
 volumes:
   redis-data:
